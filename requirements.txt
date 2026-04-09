@@ -1,0 +1,31 @@
+opencv-contrib-python>=4.8    # Core CV, SIFT, FLANN, triangulation
+numpy>=1.24                   # All matrix math
+scipy>=1.11                   # Rotation math, spatial queries
+open3d>=0.18                  # Point cloud I/O + visualization
+pycolmap>=0.6                 # C++ SfM engine bindings (BA, matching, reconstruction)
+pyceres                       # Bundle adjustment (Ceres solver)
+pillow>=10.0                  # Image I/O fallback
+pyyaml>=6.0                   # Config file loading
+tqdm>=4.0                     # Progress bars for long jobs
+```
+
+---
+
+### The One Thing Most Beginners Miss
+
+**Camera intrinsics matter enormously.** Every reconstruction assumes you know the focal length and principal point of your camera. Without them, the math is underconstrained.
+
+Your three options, in order of preference:
+
+1. **Read EXIF data** from photos — most smartphones embed focal length. Use `Pillow` or `exifread` to extract it.
+2. **Calibrate your camera** with a checkerboard pattern using `cv2.calibrateCamera()` — do this once per lens and save the matrix.
+3. **Let COLMAP estimate it** — if you use `pycolmap`, it can estimate intrinsics from scratch as part of reconstruction, but results are less stable.
+
+The camera intrinsic matrix `K` looks like this and feeds into almost every calculation in your pipeline:
+```
+K = [[fx,  0, cx],
+     [ 0, fy, cy],
+     [ 0,  0,  1]]
+
+# fx, fy = focal length in pixels
+# cx, cy = principal point (usually image center)
