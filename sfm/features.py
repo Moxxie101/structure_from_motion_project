@@ -14,4 +14,4 @@ class FeatureExtractor:
         
         if descriptors is None:
             return [], None
-        return keypoints, descriptors 
+        return keypoints, descriptors  
