@@ -11,4 +11,7 @@ class FeatureExtractor:
     def detect_and_compute(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         keypoints, descriptors = self.detector.detectAndCompute(gray, None)
-        return keypoints, descriptors  # kp = position+scale+angle, desc = 128-dim vector
+        
+        if descriptors is None:
+            return [], None
+        return keypoints, descriptors 
