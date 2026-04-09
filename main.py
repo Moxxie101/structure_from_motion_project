@@ -1,13 +1,9 @@
-import argparse, cv2, os, sys
+import argparse, cv2, os
 from sfm.loader import ImageLoader
 from sfm.features import FeatureExtractor
 from sfm.matching import FeatureMatcher
 from sfm.verification import GeometricVerifier
 from sfm.reconstruction import Reconstruction, Track
-
-# ─────────────────────────────────────────
-#  Output folder setup
-# ─────────────────────────────────────────
 
 OUTPUT_ROOT = "output"
 FOLDERS = ["features", "matching", "verification", "reconstruction"]
@@ -21,11 +17,6 @@ def save(folder: str, filename: str, image):
     cv2.imwrite(path, image)
     print(f"  Saved -> {path}")
 
-
-# ─────────────────────────────────────────
-#  Pipeline
-# ─────────────────────────────────────────
-
 class SfMPipeline:
     def __init__(self, image_path, K=None, method='sift'):
         self.loader    = ImageLoader(image_path)
@@ -33,17 +24,15 @@ class SfMPipeline:
         self.matcher   = FeatureMatcher(method='flann', descriptor_type=method)
         self.verifier  = GeometricVerifier()
         self.images    = []
-        self.features  = []   # list of (keypoints, descriptors)
-        self.K         = K    # set externally or estimated in run()
+        self.features  = []
+        self.K         = K 
 
     def run(self):
         make_output_dirs()
 
-        # ── 1. Load images ─────────────────────────────────────────────
         self.images = self.loader.load_images()
         print(f"Loaded {len(self.images)} images")
 
-        # ── 2. Extract features ────────────────────────────────────────
         print("\n[Features]")
         self.features = []
         for idx, img in enumerate(self.images):
@@ -51,22 +40,19 @@ class SfMPipeline:
             self.features.append((kps, descs))
             print(f"  Image {idx}: {len(kps)} keypoints")
 
-            # Save keypoint visualization
             vis = cv2.drawKeypoints(
                 img, kps, None,
                 flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
             )
             save("features", f"keypoints_{idx:03d}.jpg", vis)
 
-        # ── 3. Estimate K if not provided ──────────────────────────────
         if self.K is None:
             self.K = self._estimate_K(self.images[0])
 
         recon = Reconstruction(self.K)
 
-        # ── 4. Match + verify all consecutive pairs ────────────────────
         print("\n[Matching]")
-        all_matches = {}   # (i, j) -> inlier matches after verification
+        all_matches = {}
         for i in range(len(self.images) - 1):
             kps1, desc1 = self.features[i]
             kps2, desc2 = self.features[i + 1]
@@ -74,7 +60,6 @@ class SfMPipeline:
             raw = self.matcher.match(desc1, desc2)
             print(f"  Pair {i}<>{i+1}: {len(raw)} raw matches")
 
-            # Save raw match visualization
             vis_raw = cv2.drawMatches(
                 self.images[i], kps1,
                 self.images[i+1], kps2,
@@ -83,7 +68,6 @@ class SfMPipeline:
             )
             save("matching", f"matches_raw_{i:03d}_{i+1:03d}.jpg", vis_raw)
 
-            # ── 5. Geometric verification ──────────────────────────────
             print(f"\n[Verification] Pair {i}<>{i+1}")
             _, inliers = self.verifier.verify(kps1, kps2, raw)
             if not inliers:
@@ -93,7 +77,6 @@ class SfMPipeline:
             print(f"  Pair {i}<>{i+1}: {len(inliers)} inliers after RANSAC")
             all_matches[(i, i+1)] = inliers
 
-            # Save verified match visualization
             vis_ver = cv2.drawMatches(
                 self.images[i], kps1,
                 self.images[i+1], kps2,
@@ -106,7 +89,6 @@ class SfMPipeline:
             print("No valid pairs found. Exiting.")
             return recon
 
-        # ── 6. Seed reconstruction from best pair ─────────────────────
         print("\n[Reconstruction]")
         best_pair = max(all_matches, key=lambda k: len(all_matches[k]))
         i, j      = best_pair
@@ -127,7 +109,6 @@ class SfMPipeline:
         print(f"  {recon.summary()}")
         registered = {i, j}
 
-        # ── 7. Incrementally register remaining images ─────────────────
         for new_id in range(len(self.images)):
             if new_id in registered:
                 continue
@@ -163,15 +144,12 @@ class SfMPipeline:
             removed = recon.filter_tracks()
             print(f"  Image {new_id} registered | {recon.summary()} | Filtered {removed} tracks")
 
-        # ── 8. Save point cloud summary image ─────────────────────────
         pts, colors = recon.point_cloud()
         print(f"\nFinal {recon.summary()}")
         print(f"Point cloud: {len(pts)} points")
         self._save_point_cloud_preview(pts, colors)
 
         return recon
-
-    # ── Helpers ───────────────────────────────────────────────────────
 
     def _estimate_K(self, image) -> 'np.ndarray':
         import numpy as np
@@ -229,11 +207,6 @@ class SfMPipeline:
         save("reconstruction", "point_cloud_preview.jpg", canvas)
 
 
-# ─────────────────────────────────────────
-#  Archived iteration steps (kept for reference)
-# ─────────────────────────────────────────
-
-# ── Iteration 1: Basic loading + keypoint display ──────────────────────────
 # loader = ImageLoader(args.path)
 # images = loader.load_images()
 # extractor = FeatureExtractor(method='sift')
@@ -251,7 +224,7 @@ class SfMPipeline:
 #     cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
-# ── Iteration 2: Matching between consecutive pairs ────────────────────────
+
 # features = [extractor.detect_and_compute(img) for img in images]
 # for i in range(len(images) - 1):
 #     kps1, desc1 = features[i]
@@ -265,11 +238,6 @@ class SfMPipeline:
 # cv2.imshow("Matches", vis)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
-
-
-# ─────────────────────────────────────────
-#  Entry point
-# ─────────────────────────────────────────
 
 parser = argparse.ArgumentParser(description="Structure from Motion pipeline")
 parser.add_argument("--path", "-p", type=str, default=None,
