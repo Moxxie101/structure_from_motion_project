@@ -1,4 +1,5 @@
 import argparse, cv2, os
+import numpy as np
 from sfm.loader import ImageLoader
 from sfm.features import FeatureExtractor
 from sfm.matching import FeatureMatcher
@@ -152,7 +153,6 @@ class SfMPipeline:
         return recon
 
     def _estimate_K(self, image) -> 'np.ndarray':
-        import numpy as np
         h, w = image.shape[:2]
         f    = max(h, w)
         return np.array([
